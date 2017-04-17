@@ -1,5 +1,5 @@
+# -*- coding: utf-8 -*-
 import mxnet as mx
-
 
 class Config(object):
     def __init__(self, args):
@@ -21,8 +21,3 @@ class Config(object):
 
         self.num_envs = 16
         self.t_max = 8
-
-        # Override defaults with values from `args`.
-        # for arg in self.__dict__:
-        #     if arg in args.__dict__:
-        #         self.__setattr__(arg, args.__dict__[arg])

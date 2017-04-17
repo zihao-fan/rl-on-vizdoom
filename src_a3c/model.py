@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 from __future__ import print_function
 from itertools import chain
 import numpy as np
@@ -68,10 +69,7 @@ class Agent(object):
 
     def train_step(self, env_xs, env_as, env_rs, env_vs, paralell_num):
         # NOTE(reed): Rebind to set the data shape.
-        self.model.bind(
-            data_shapes=[('data', (paralell_num,) + self.input_size)],
-            label_shapes=None, for_training=True,
-            force_rebind=True, grad_req="write")
+        self.model.reshape([('data', (len(env_xs),) + self.input_size)])
 
         xs = mx.nd.array(env_xs, ctx=self.ctx) # (paralell_num,) + self.input_size
         as_ = np.array(list(chain.from_iterable(env_as)))

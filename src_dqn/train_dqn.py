@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 from __future__ import division
 from __future__ import print_function
+import vizdoom as vzd
 from vizdoom import *
 import numpy as np
 from random import sample, randint, random
@@ -12,12 +13,12 @@ from time import time, sleep
 import json, os
 
 # algorithm relevant
-from brain_dqn import BrainDQN
-from brain_dqn import frame_repeat, resolution
+from agent_dqn import AgentDQN
+from agent_dqn import frame_repeat, resolution
 
 # Training regime
 epochs = 10
-learning_steps_per_epoch = 20000#2000
+learning_steps_per_epoch = 20000
 test_episodes_per_epoch = 10
 feature_extractor_list = ['pool_2_output', 'ch_concat_3c_chconcat_output',
 'ch_concat_4e_chconcat_output', 'ch_concat_5b_chconcat_output']
@@ -27,8 +28,7 @@ channel_number = 3
 # Other parameters
 episodes_to_watch = 10
 
-# config_file_path = '../scenarios/simpler_basic.cfg'
-config_file_path = '../scenarios/cig.cfg'
+config_file_path = os.path.join(vzd.__path__[0], 'scenarios', 'cig.cfg')
 
 def preprocess_resize(image, channels=3):
     '''
@@ -42,7 +42,7 @@ def preprocess_resize(image, channels=3):
     img = img.astype(np.float32)
     return img
 
-def perform_learning_step(brain, screen_buffer, epoch):
+def perform_learning_step(agent, screen_buffer, epoch):
         '''
         Makes an action according to eps-greedy policy, observes the result 
         (next state, reward) and learns from the transition
@@ -65,22 +65,22 @@ def perform_learning_step(brain, screen_buffer, epoch):
 
         eps = exploration_rate(epoch)
         if random() < eps:
-            a = randint(0, brain.available_action_count - 1)
+            a = randint(0, agent.available_action_count - 1)
         else:
-            a = brain.get_best_action(s1)
-        reward = game.make_action(brain.actions[a], frame_repeat)
+            a = agent.get_best_action(s1)
+        reward = game.make_action(agent.actions[a], frame_repeat)
 
         is_terminal = game.is_episode_finished()
         s2 = preprocess_resize(game.get_state().screen_buffer) if not is_terminal else None
 
-        brain.memory.add_transition(s1, a, s2, is_terminal, reward)
-        brain.learn_from_memory()
+        agent.memory.add_transition(s1, a, s2, is_terminal, reward)
+        agent.learn_from_memory()
 
 def initialize_vizdoom(config_file_path):
     print('Initializing doom...')
     game = DoomGame()
     game.load_config(config_file_path)
-    game.set_window_visible(True)
+    game.set_window_visible(False)
     game.set_mode(Mode.PLAYER)
     game.set_screen_format(ScreenFormat.RGB24)
     game.set_screen_resolution(ScreenResolution.RES_320X240)
@@ -106,7 +106,7 @@ extractor = feature_extractor_list[0]
 result_dump_path = os.path.join('..', 'results', extractor + '.json')
 game.init()
 print('Doom initialized.')
-my_brain = BrainDQN(n, feature_extractor=extractor, state_frames=channel_number)
+my_agent = AgentDQN(n, feature_extractor=extractor, channels=channel_number)
 print('Starting the training!')
 time_start = time()
 result_record = []
@@ -119,7 +119,7 @@ for epoch in range(epochs):
     game = new_episode_with_bots(game)
     for learning_step in trange(learning_steps_per_epoch):
         screen_buffer = game.get_state().screen_buffer
-        perform_learning_step(my_brain, screen_buffer, epoch)
+        perform_learning_step(my_agent, screen_buffer, epoch)
         if game.is_episode_finished():
             score = game.get_total_reward()
             train_scores.append(score)
@@ -143,8 +143,8 @@ for epoch in range(epochs):
         game = new_episode_with_bots(game)
         while not game.is_episode_finished():
             state = preprocess_resize(game.get_state().screen_buffer)
-            best_action_index = my_brain.get_best_action(state)
-            game.make_action(my_brain.actions[best_action_index], frame_repeat)
+            best_action_index = my_agent.get_best_action(state)
+            game.make_action(my_agent.actions[best_action_index], frame_repeat)
             if game.is_player_dead():
                 game.respawn_player()
         r = game.get_total_reward()
@@ -171,7 +171,7 @@ with open(result_dump_path, 'w') as f:
 # model_savefile = os.path.join('..', 'saved_weights', extractor+'.weights')
 # print('Training finished. It\'s time to watch!')
 # print('Loading the network weights from', model_savefile)
-# my_brain = BrainDQN(n, feature_extractor=extractor, state_frames=channel_number, param_file=model_savefile)
+# my_agent = AgentDQN(n, feature_extractor=extractor, channels=channel_number, param_file=model_savefile)
 # game = initialize_vizdoom(config_file_path)
 # game.set_window_visible(True)
 # game.set_mode(Mode.ASYNC_PLAYER)
@@ -181,8 +181,8 @@ with open(result_dump_path, 'w') as f:
 #     game.new_episode()
 #     while not game.is_episode_finished():
 #         state = preprocess_resize(game.get_state().screen_buffer)
-#         best_action_index = my_brain.get_best_action(state)
-#         game.set_action(my_brain.actions[best_action_index])
+#         best_action_index = my_agent.get_best_action(state)
+#         game.set_action(my_agent.actions[best_action_index])
 #         for _ in range(frame_repeat):
 #             game.advance_action()
 

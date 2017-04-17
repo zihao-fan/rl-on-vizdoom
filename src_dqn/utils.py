@@ -6,6 +6,9 @@ import numpy as np
 from random import sample, randint, random
 import os
 
+current_path = os.path.realpath(__file__)
+root_path = '/'.join(current_path.split('/')[:-2])
+
 def get_filenames_from_dir(my_dir):
     my_files = [ f for f in os.listdir(my_dir) if os.path.isfile(os.path.join(my_dir, f))]
     return my_files

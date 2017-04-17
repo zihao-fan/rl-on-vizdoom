@@ -1,4 +1,7 @@
 # -*- coding: utf-8 -*-
+'''
+Adopted from https://github.com/ebonyclock/deep_rl_vizdoom.git
+'''
 from __future__ import print_function
 import numpy as np
 import itertools as it
@@ -8,6 +11,10 @@ import cv2
 import time
 
 class VizdoomWrapper(object):
+    '''
+        This class helps with user to have APIs similar to gym.
+        It also handles preprocessing, reward scaling and keeps track of recent frames.
+    '''
     def __init__(self,
                  config_file,
                  frame_skip=4,
@@ -47,12 +54,17 @@ class VizdoomWrapper(object):
         self._img_channels = stack_n_frames
         self.img_shape = (stack_n_frames, resolution[1], resolution[0])
         self.obs_size = stack_n_frames * resolution[1] * resolution[0]
+
         # TODO allow continuous actions
+        # Allowing all combinations of action. If the possible action number is 3, then the size of the
+        # action space will be 2^3. This could somehow solve the problem that policy peaks at one action.
         self._actions = [list(a) for a in it.product([0, 1], repeat=len(doom.get_available_buttons()))]
         self.actions_num = len(self._actions)
         self._current_screen = None
         self._current_stacked_screen = np.zeros(self.img_shape, dtype=np.float32)
 
+        # Some algorithms may use these variables. Like the misc info (health, ammo, etc.) or the last n actions taken.
+        # These part havn't been thoroughly tested.
         self._current_stacked_misc = None
         self.input_n_last_actions = 0
         self.misc_scale = None
@@ -121,6 +133,10 @@ class VizdoomWrapper(object):
             self._update_misc()
 
     def make_action(self, action_index):
+        '''
+            take in a integer index (0-indexing)
+            make the action and update the internal states
+        '''
         action = self._actions[action_index]
         reward = self.doom.make_action(action, self._frame_skip) * self._reward_scale
         if not self.doom.is_episode_finished():
@@ -133,13 +149,20 @@ class VizdoomWrapper(object):
             self._update_screen()
             if self.use_misc:
                 self._update_misc()
-
         return reward
 
     def get_current_state(self):
-        # return self._current_stacked_screen, self._current_stacked_misc
-        # TODO: adapt misc infor here
-        return self._current_stacked_screen.reshape((1,) + self._current_stacked_screen.shape), None
+        '''
+            returns 
+                screen: 4D ndarray (1, frame_channel, width, height)
+                misc: 2D ndarray (1, game variable num * channels)
+        '''
+        if self.use_misc:
+            current_stacked_misc = np.asarray(self._current_stacked_misc, dtype=np.float32)
+            return self._current_stacked_screen.reshape((1,) + self._current_stacked_screen.shape), \
+                   current_stacked_misc.reshape((1,) + current_stacked_misc.shape)
+        else:
+            return self._current_stacked_screen.reshape((1,) + self._current_stacked_screen.shape), None
 
     def get_total_reward(self):
         return self.doom.get_total_reward() * self._reward_scale
@@ -151,13 +174,9 @@ class VizdoomWrapper(object):
         self.doom.close()
 
 if __name__ == '__main__':
-    doom = VizdoomWrapper(config_file='simpler_basic.cfg', display=True, frame_skip=4)
+    doom = VizdoomWrapper(config_file='basic.cfg', display=False, use_misc=True, frame_skip=4)
     actions_num = doom.actions_num
     while not doom.is_terminal():
-        screen, _ = doom.get_current_state()
-        screen = screen.flatten()
-        print('screen shape', screen.shape)
-        print('screen type', type(screen))
+        screen, misc = doom.get_current_state()
         reward = doom.make_action(np.random.choice(np.arange(actions_num)))
-        print('reward:', reward)
         time.sleep(0.1)

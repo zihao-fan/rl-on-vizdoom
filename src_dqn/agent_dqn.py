@@ -2,36 +2,46 @@
 # -*- coding: utf-8 -*-
 from __future__ import division
 from __future__ import print_function
+import os
 import mxnet as mx
 import numpy as np
 import itertools as it
 from random import sample, randint, random
 import skimage.color, skimage.transform
-from utils import ReplayMemory
+from utils import ReplayMemory, root_path
 
 # Q-Learning Hyper-parameters
 discount_factor = 0.99
 replay_memory_size = 10000
 resolution = (224, 224)
-ctx = mx.gpu(0)
+ctx = mx.cpu(0)
 update_time = 200
 
 # Neural network settings
 batch_size = 64
-model_save_dir = '../dqn_saved_weights/'
-pretrained_model_name = '../pretrained_models/Inception-BN'
+model_save_dir = os.path.join(root_path, 'dqn_saved_weights')
+pretrained_model_name = os.path.join(root_path, 'pretrained_models', 'Inception-BN')
 frame_repeat = 12
 
-class BrainDQN(object):
+class AgentDQN(object):
     
-    def __init__(self, action_count, feature_extractor=None, state_frames=1, param_file=None):
-        self.time_step = 0
-        self.state_frames = state_frames
+    def __init__(self, 
+            action_count, 
+            feature_extractor=None, 
+            channels=1, 
+            param_file=None):
+
+        self.time_step = 0 # A internal counter for model save
+
+        self.channels = channels
         self.feature_extractor = feature_extractor if feature_extractor != None else 'flatten_output'
-        self.model_savefile = model_save_dir + 'dqn_' + self.feature_extractor + '.weights'
-        self.memory = ReplayMemory(capacity=replay_memory_size, resolution=resolution, s1_frames=state_frames)
+        if not os.path.exists(model_save_dir):
+            print('Creating directory', model_save_dir)
+            os.makedirs(model_save_dir)
+        self.model_savefile = os.path.join(model_save_dir, 'dqn_' + self.feature_extractor + '.weights')
+        self.memory = ReplayMemory(capacity=replay_memory_size, resolution=resolution, s1_frames=channels)
         self.action_count = action_count
-        self.actions = [ list(a) for a in it.product([0, 1], repeat=action_count) ]
+        self.actions = [list(a) for a in it.product([0, 1], repeat=action_count)]
         self.available_action_count = len(self.actions)
         
         # neural net
@@ -76,7 +86,6 @@ class BrainDQN(object):
         arg_params, aux_params = self.qnet.get_params()
         self.target.init_params(initializer = None, arg_params= arg_params,
                                 aux_params = aux_params, force_init = True)
-        # print('[Copied weights.]')
 
     def get_new_args(self):
         arg_params = self.pretrained_net[1]
@@ -102,7 +111,7 @@ class BrainDQN(object):
                                   label_names = ('q_target',),
                                   context = ctx)
             batch = batch_size
-            mod_q.bind(data_shapes = [('data', (batch, self.state_frames, resolution[0], resolution[1])),
+            mod_q.bind(data_shapes = [('data', (batch, self.channels, resolution[0], resolution[1])),
                                     ('action', (batch, self.available_action_count))],
                        label_shapes = [('q_target', (batch,))],
                        for_training = is_train)
@@ -120,7 +129,7 @@ class BrainDQN(object):
                                   label_names = None,
                                   context = ctx)
             batch = batch_size
-            mod_q.bind(data_shapes = [('data', (batch, self.state_frames, resolution[0], resolution[1]))],
+            mod_q.bind(data_shapes = [('data', (batch, self.channels, resolution[0], resolution[1]))],
                      for_training = is_train)
             mod_q.init_params(initializer = mx.init.Xavier(factor_type='in', magnitude=2.34), arg_params=bef_args)
             # load pretrained params
@@ -154,7 +163,7 @@ class BrainDQN(object):
                 self.copy_target_network()
 
     def get_best_action(self, current_state):
-        input_matrix = np.zeros((batch_size, self.state_frames, resolution[0], resolution[1]))
+        input_matrix = np.zeros((batch_size, self.channels, resolution[0], resolution[1]))
         input_matrix[0] = current_state
         self.target.forward(mx.io.DataBatch([mx.nd.array(input_matrix, ctx)],[]))
         qvalue = np.squeeze(self.target.get_outputs()[0].asnumpy()[0])
@@ -163,5 +172,5 @@ class BrainDQN(object):
 
 
 if __name__ == '__main__':
-    my_brain = BrainDQN(n, state_frames=1)
-    print('My brain has initialized!')
+    my_agent = AgentDQN(3, channels=3)
+    print('My agent has initialized!')

@@ -1,9 +1,9 @@
-"""Trains an `Agent` using trajectories from multiple environments."""
+# -*- coding: utf-8 -*-
 from __future__ import print_function
 import argparse
 from itertools import chain
 import time
-import gym
+# import gym
 import numpy as np
 import mxnet as mx
 from config import Config
@@ -28,18 +28,8 @@ def train_episode(agent, envs, t_max):
     done = np.array([False for _ in range(num_envs)])
     all_done = False
     t = 1
-    # NOTE(reed): For simplicity, it stops this episode when any of the envs is
-    # done. As a side effect, the episode_rs may appear to vibrate for the
-    # initial rounds instead of decreasing gradually.
     while not all_done:
-        # NOTE(reed): Rebind to set the data shape.
-        # Binded shape is Provided shape !!
-        agent.model.bind(
-            data_shapes=[('data', (num_envs,)+agent.input_size)],
-            label_shapes=None,
-            for_training=False,
-            force_rebind=True,
-            grad_req="null")
+        agent.model.reshape([('data', (num_envs,) + agent.input_size)])
 
         # step_xs.shape == (num_envs,) + input.shape
         step_xs = np.vstack([o for o in observations])
@@ -76,7 +66,7 @@ def train_episode(agent, envs, t_max):
                     observations[i] = envs[i].get_current_state()[0]
 
         # Perform an update every `t_max` steps.
-        if t == t_max: # and not any_done:
+        if t == t_max:
             # If the episode has not finished, add current state's value. This
             # will be used to 'bootstrap' the final return (see Algorithm S3
             # in A3C paper).
@@ -135,10 +125,10 @@ if __name__ == '__main__':
     print('config=%s' % config.__dict__)
 
     envs = []
-    # Create and seed the environments
+    # Create and set seeds to the environments
     for i in range(config.num_envs):
         if i == 0:
-            envs.append(VizdoomWrapper('simpler_basic.cfg', seed=i, reward_scale=0.01, display=True))
+            envs.append(VizdoomWrapper('simpler_basic.cfg', seed=i, reward_scale=0.01, display=False))
         else:
             envs.append(VizdoomWrapper('simpler_basic.cfg', seed=i, reward_scale=0.01))
 
